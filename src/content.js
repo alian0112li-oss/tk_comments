@@ -6,6 +6,10 @@
 (function () {
   "use strict";
 
+  // 防重复：manifest 注入 与 popup 的 scripting 注入可能同时发生，只允许一份运行
+  if (window.__TK_CONTENT_LOADED__) return;
+  window.__TK_CONTENT_LOADED__ = true;
+
   const TAG = "TK_SCRAPER";
   const clog = (...a) => console.log("%c[TK内容]", "color:#00b894", ...a);
 

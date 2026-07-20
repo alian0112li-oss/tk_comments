@@ -14,15 +14,41 @@ async function activeTab() {
   return tab;
 }
 
-async function sendToTab(msg) {
-  const tab = await activeTab();
-  if (!tab) return {};
+function rawSend(tabId, msg) {
   return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tab.id, msg, (resp) => {
+    chrome.tabs.sendMessage(tabId, msg, (resp) => {
       if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
       else resolve(resp || {});
     });
   });
+}
+
+// 主动把 content script 注入当前标签页（解决"重载扩展后没刷新页面"导致的
+// Receiving end does not exist；content.js 内有防重复保护）
+async function ensureInjected(tabId) {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["src/content.js"] });
+    return true;
+  } catch (e) {
+    return e && e.message ? e.message : String(e);
+  }
+}
+
+async function sendToTab(msg) {
+  const tab = await activeTab();
+  if (!tab) return { error: "无活动标签页" };
+  if (!/^https?:\/\/([a-z0-9-]+\.)?tiktok\.com\//i.test(tab.url || "")) {
+    return { error: "当前不是 tiktok.com 页面：" + (tab.url || "").slice(0, 60) };
+  }
+  let r = await rawSend(tab.id, msg);
+  if (r.error && /Receiving end does not exist|Could not establish/i.test(r.error)) {
+    // content script 不在 -> 主动注入后重试
+    const inj = await ensureInjected(tab.id);
+    if (inj !== true) return { error: "注入失败：" + inj };
+    await new Promise((s) => setTimeout(s, 300));
+    r = await rawSend(tab.id, msg);
+  }
+  return r;
 }
 
 // 从当前标签页 URL 里解析 aweme_id（.../video/<id>）
