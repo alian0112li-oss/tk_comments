@@ -110,13 +110,13 @@
       }
     }
 
-    // 楼中楼："回复 @xxx：" 前缀 -> 记录被回复者
+    // 楼中楼："回复/返信/reply @xxx：" 前缀 -> 记录被回复者（多语言）
     let replyToUsername = "";
     let cleanText = text;
-    const rm = text.match(/^回复\s*@([^\s:：]+)[：:]\s*/);
+    const rm = text.match(/^(?:回复|回覆|返信|reply|답글|responder)\s*@?([^\s:：]+)\s*[：:]\s*/i);
     if (rm) {
       replyToUsername = rm[1];
-      cleanText = text.replace(/^回复\s*@[^\s:：]+[：:]\s*/, "");
+      cleanText = text.slice(rm[0].length);
     }
 
     if (!cleanText && !nickname) return null;
@@ -158,10 +158,10 @@
       top.level = 0;
       top.parent_id = null;
 
-      // 顶层评论的"查看 N 条回复"总数
+      // 顶层评论的回复总数：取"查看…回复"控件里的第一个数字（语言无关）
       const vr = thread.querySelector(SEL.viewReplies);
-      if (vr) {
-        const m = (vr.textContent || "").match(/(\d[\d,\.]*\s*[万kKmM]?)\s*条回复/);
+      if (vr && !COLLAPSE_RE.test(vr.textContent || "")) {
+        const m = (vr.textContent || "").match(/([\d,\.]+\s*[万kKmM]?)/);
         if (m) top.reply_comment_total = parseCount(m[1]);
       }
       out.push(top);
@@ -201,19 +201,27 @@
 
   // ================= 展开回复 + 滚动 =================
 
-  const EXPAND_RE = /(查看|展开)\s*\d?[\d,\.]*\s*[万kKmM]?\s*条?回复|view\s+\d+\s+repl|more\s+repl/i;
+  // 语言无关的展开/收起判定（中/日/英/韩/西）
+  const EXPAND_RE = /查看|展开|更多|view|see|show|more|repl|返信|さらに|もっと|表示|답글|더\s?보기|더보기|ver más|más/i;
+  const COLLAPSE_RE = /收起|隐藏|hide|less|非表示|閉じる|숨기기|접기|ver menos|menos/i;
 
   function clickExpanders() {
     let clicked = 0;
-    // "查看 N 条回复" / "展开更多回复" —— 优先在回复容器内找可点元素
-    const nodes = document.querySelectorAll(
-      SEL.viewReplies + " button, " + SEL.viewReplies + " span, " + SEL.viewReplies + ", [class*='DivViewMoreRepliesWrapper'] button"
+    // 展开控件都在"回复容器"里，不依赖文案：只要不是"收起"，且文本带数字或含展开词就点
+    const containers = document.querySelectorAll(
+      SEL.viewReplies + ", [class*='DivViewMoreRepliesWrapper']"
     );
-    for (const el of nodes) {
-      const t = (el.textContent || "").trim();
-      if (t && t.length < 30 && EXPAND_RE.test(t)) {
+    for (const cont of containers) {
+      const t = (cont.textContent || "").trim();
+      if (!t || t.length > 40) continue;
+      if (COLLAPSE_RE.test(t)) continue; // 跳过"收起/非表示"，避免把已展开的又收起
+      if (/\d/.test(t) || EXPAND_RE.test(t)) {
+        const btn =
+          cont.querySelector("button, [role='button']") ||
+          cont.querySelector("span") ||
+          cont;
         try {
-          el.click();
+          btn.click();
           clicked++;
         } catch (_) {}
       }
