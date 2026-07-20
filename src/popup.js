@@ -106,6 +106,7 @@ function toCsv(comments) {
     "digg_count",
     "reply_comment_total",
     "create_time",
+    "create_time_text",
     "create_time_iso",
     "aweme_id",
   ];
@@ -126,6 +127,7 @@ function toCsv(comments) {
       c.digg_count,
       c.reply_comment_total,
       c.create_time,
+      c.create_time_text || "",
       iso,
       c.aweme_id,
     ];
@@ -154,7 +156,27 @@ $("stop").addEventListener("click", async () => {
   refreshStats();
 });
 
+$("scanOnce").addEventListener("click", async () => {
+  const r = await sendToTab({ type: "SCAN_ONCE" });
+  if (r.error) log("无法在此页面扫描（需在 tiktok.com 视频页）：" + r.error);
+  else log(`已扫描当前页面，解析出 ${r.scanned} 条（含已存在的）。`);
+  setTimeout(refreshStats, 300);
+});
+
 $("refresh").addEventListener("click", refreshStats);
+
+// 检测当前标签页 content script 是否连通，并显示可见评论线程数
+async function checkConn() {
+  const r = await sendToTab({ type: "PING" });
+  const el = $("conn");
+  if (r.error || !r.ok) {
+    el.textContent = "· 未连接";
+    el.style.color = "#e17055";
+  } else {
+    el.textContent = `· 已连接(可见${r.threads}条)`;
+    el.style.color = "#00b894";
+  }
+}
 
 $("clear").addEventListener("click", async () => {
   if (!confirm("确定清空所有已采集数据？")) return;
@@ -194,4 +216,5 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 // 打开时刷新一次，并定时刷新以显示实时增长
 refreshStats();
+checkConn();
 setInterval(refreshStats, 1500);

@@ -4,16 +4,22 @@
 
 ## 工作原理
 
-不主动构造请求（TikTok 的接口需要签名参数），而是**搭便车**：在页面里劫持 `fetch` / `XMLHttpRequest`，读取 TikTok 自己拉取评论时返回的 JSON。这些响应天然带有关系字段：
+**主方案：解析 DOM。** 回复关系由 DOM 嵌套天然编码——每个 `DivCommentObjectWrapper` = 一个顶层评论 + 它的 `DivReplyContainer`（该评论的所有回复）。扩展边自动滚动边解析，把「谁回复谁」按层级还原。因为 TikTok 是**虚拟列表**（滚出视口的评论会从 DOM 移除），所以采用「边滚边抓 + 去重累积」。
 
-| 字段 | 含义 |
+用到的稳定锚点：
+
+| 锚点 | 含义 |
 | --- | --- |
-| `cid` | 评论唯一 id |
-| `reply_id` | 该回复所属的**顶层评论** cid（顶层评论为 `0`）|
-| `reply_to_reply_id` | 楼中楼时，直接回复的那条**回复** cid |
-| `reply_comment_total` | 顶层评论的回复总数 |
+| `[class*="DivCommentObjectWrapper"]` | 一个顶层评论线程（含其回复）|
+| `[data-e2e="comment-username-1/2"]` | 用户名（`-1` 顶层 / `-2` 回复）|
+| `[data-e2e="comment-level-1/2"]` | 评论正文 |
+| `[class*="DivReplyContainer"]` | 回复容器 |
+| `查看 N 条回复`（在 `DivViewRepliesContainer`）| 回复总数 & 展开按钮 |
+| `[class*="DivLikeContainer"]` | 点赞数 |
 
-扩展据此计算每条评论的 `parent_id` 与 `level`（0=顶层 / 1=回复 / 2=楼中楼），并在导出时重建成树。
+因 DOM 无评论 id，扩展用「作者+正文+时间」生成稳定哈希作 `cid` 去重；每条回复的 `parent_id` 指向所属顶层评论，`level`（0/1）标记层级，楼中楼再记 `reply_to_username`。
+
+**兜底方案：网络拦截。** 同时注入脚本劫持 `fetch`/`XHR`，若能抓到评论 API JSON（自带 `cid`/`reply_id`/`reply_to_reply_id`），字段更全时一并存入。
 
 ## 目录结构
 
