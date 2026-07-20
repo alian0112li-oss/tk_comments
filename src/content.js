@@ -9,6 +9,20 @@
   "use strict";
 
   const TAG = "TK_SCRAPER";
+  const clog = (...a) => console.log("%c[TK内容]", "color:#00b894", ...a);
+
+  // ---------- 注入页面拦截器（MAIN 上下文）----------
+  // 用 <script src> 注入，兼容性好于 manifest 的 world:MAIN。
+  try {
+    const s = document.createElement("script");
+    s.src = chrome.runtime.getURL("src/interceptor.js");
+    s.async = false;
+    (document.head || document.documentElement).appendChild(s);
+    s.onload = () => s.remove();
+    clog("已注入拦截器");
+  } catch (e) {
+    clog("注入拦截器失败", e);
+  }
 
   // ---------- 归一化 ----------
 
@@ -102,19 +116,33 @@
       }
       if (!payload) return;
       const comments = extractAll(payload);
+      clog(`收到 ${d.kind}，解析出 ${comments.length} 条`);
       if (comments.length) {
         try {
-          chrome.runtime.sendMessage({
-            type: "COMMENTS",
-            source: d.kind,
-            url: d.url,
-            comments: comments,
-            has_more: payload.has_more,
-            total: payload.total,
-            pageUrl: location.href,
-          });
-        } catch (_) {}
+          chrome.runtime.sendMessage(
+            {
+              type: "COMMENTS",
+              source: d.kind,
+              url: d.url,
+              comments: comments,
+              has_more: payload.has_more,
+              total: payload.total,
+              pageUrl: location.href,
+            },
+            (resp) => {
+              if (chrome.runtime.lastError) {
+                clog("转发到后台失败", chrome.runtime.lastError.message);
+              } else if (resp) {
+                clog(`后台已存，新增 ${resp.added}，累计 ${resp.stats && resp.stats.total}`);
+              }
+            }
+          );
+        } catch (e) {
+          clog("sendMessage 异常", e);
+        }
       }
+    } else if (d.kind === "ready") {
+      clog("拦截器就绪信号已收到 ✅");
     }
   });
 

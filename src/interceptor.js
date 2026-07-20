@@ -1,17 +1,21 @@
-// interceptor.js —— 运行在页面 MAIN world，document_start 注入。
+// interceptor.js —— 由 content.js 注入到页面 MAIN 上下文运行。
 // 目的：在 TikTok 自己发起评论请求时，劫持 fetch / XMLHttpRequest 的响应，
 // 拿到评论 API 的原始 JSON（里面自带回复关系字段），通过 postMessage 转交给 content.js。
 // 不伪造/不主动发请求 —— 只是"搭便车"读取网站自己拉取的数据，签名参数由 TikTok 页面自行生成。
 
 (function () {
   "use strict";
+  if (window.__TK_SCRAPER_HOOKED__) return; // 防重复注入
+  window.__TK_SCRAPER_HOOKED__ = true;
 
   const TAG = "TK_SCRAPER";
+  const DEBUG = true;
+  const dlog = (...a) => DEBUG && console.log("%c[TK拦截]", "color:#6c5ce7", ...a);
 
-  // 需要捕获的评论接口。TikTok web 端：
+  // 需要捕获的评论接口。放宽匹配以适配改版：
   //   /api/comment/list/         -> 顶层评论
   //   /api/comment/list/reply/   -> 某条评论下的回复
-  const COMMENT_URL_RE = /\/api\/comment\/list(\/reply)?\//;
+  const COMMENT_URL_RE = /\/api\/comment\/list/i;
 
   function urlOf(input) {
     try {
@@ -25,20 +29,18 @@
 
   function classify(url) {
     if (!COMMENT_URL_RE.test(url)) return null;
-    return /\/reply\//.test(url) ? "reply" : "list";
+    return /\/reply\b|reply\//i.test(url) ? "reply" : "list";
   }
 
   function forward(kind, url, json) {
+    const n = json && Array.isArray(json.comments) ? json.comments.length : 0;
+    dlog(`捕获 ${kind}：${n} 条`, url.slice(0, 120));
     try {
-      window.postMessage(
-        { source: TAG, kind: kind, url: url, payload: json, ts: Date.now() },
-        "*"
-      );
+      window.postMessage({ source: TAG, kind, url, payload: json, ts: Date.now() }, "*");
     } catch (e) {
-      // JSON 里若有无法结构化克隆的内容，退化为字符串传递
       try {
         window.postMessage(
-          { source: TAG, kind: kind, url: url, payloadText: JSON.stringify(json), ts: Date.now() },
+          { source: TAG, kind, url, payloadText: JSON.stringify(json), ts: Date.now() },
           "*"
         );
       } catch (_) {}
@@ -53,20 +55,21 @@
       const kind = classify(url);
       const p = origFetch.apply(this, arguments);
       if (!kind) return p;
+      dlog("fetch 命中评论接口", url.slice(0, 120));
       return p.then(function (resp) {
         try {
-          // clone 后异步读取，绝不影响页面自己的消费
           resp
             .clone()
             .json()
-            .then(function (json) {
-              forward(kind, url, json);
-            })
-            .catch(function () {});
+            .then((json) => forward(kind, url, json))
+            .catch((e) => dlog("解析 fetch 响应失败", e));
         } catch (_) {}
         return resp;
       });
     };
+    dlog("fetch 已劫持");
+  } else {
+    dlog("警告：window.fetch 不可用");
   }
 
   // ---- 劫持 XMLHttpRequest ----
@@ -86,6 +89,7 @@
     XHR.prototype.send = function () {
       const self = this;
       if (self.__tk_kind) {
+        dlog("XHR 命中评论接口", String(self.__tk_url).slice(0, 120));
         self.addEventListener("load", function () {
           try {
             let json = null;
@@ -95,13 +99,16 @@
               json = self.response;
             }
             if (json) forward(self.__tk_kind, self.__tk_url, json);
-          } catch (_) {}
+          } catch (e) {
+            dlog("解析 XHR 响应失败", e);
+          }
         });
       }
       return origSend.apply(this, arguments);
     };
+    dlog("XMLHttpRequest 已劫持");
   }
 
-  // 让 content.js 知道拦截器已就位
+  dlog("拦截器就绪 ✅");
   window.postMessage({ source: TAG, kind: "ready", ts: Date.now() }, "*");
 })();
