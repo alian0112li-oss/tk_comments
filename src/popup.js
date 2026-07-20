@@ -232,6 +232,67 @@ $("exportCsv").addEventListener("click", async () => {
   log(`已导出 ${comments.length} 条（CSV）。`);
 });
 
+// 深度优先展开成有序行（回复紧跟父评论），带层级
+function treeToRows(tree) {
+  const rows = [];
+  const walk = (node, depth) => {
+    rows.push({ node, depth });
+    (node.children || []).forEach((ch) => walk(ch, depth + 1));
+  };
+  tree.forEach((n) => walk(n, 0));
+  return rows;
+}
+
+function downloadBytes(filename, bytes, mime) {
+  const blob = new Blob([bytes], { type: mime });
+  const url = URL.createObjectURL(blob);
+  chrome.downloads.download({ url, filename, saveAs: true }, () => {
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+}
+
+$("exportXlsx").addEventListener("click", async () => {
+  const { comments, awemeId } = await getComments();
+  if (!comments.length) return log("没有数据可导出。");
+  if (!window.TKXlsx) return log("Excel 模块未加载，请重载扩展。");
+
+  const tree = buildTree(comments);
+  const ordered = treeToRows(tree);
+
+  const header = [
+    "序号", "层级", "缩进正文", "正文", "昵称", "用户名", "点赞数",
+    "回复数", "时间", "回复给", "父评论ID", "评论ID", "视频ID",
+  ];
+  const rows = [header];
+  ordered.forEach((it, i) => {
+    const c = it.node;
+    const indent = "    ".repeat(it.depth) + (it.depth ? "└ " : "");
+    rows.push([
+      i + 1,
+      it.depth, // 0=顶层, 1=回复, 2=楼中楼
+      indent + (c.text || ""),
+      c.text || "",
+      (c.user && c.user.nickname) || "",
+      (c.user && c.user.unique_id) || "",
+      c.digg_count || 0,
+      c.reply_comment_total || 0,
+      c.create_time_text || (c.create_time ? new Date(c.create_time * 1000).toLocaleString() : ""),
+      c.reply_to_username || "",
+      c.parent_id || "",
+      c.cid || "",
+      c.aweme_id || "",
+    ]);
+  });
+
+  const bytes = window.TKXlsx.build([{ name: "评论(树形)", rows }]);
+  downloadBytes(
+    `tiktok_comments_${awemeId || "all"}.xlsx`,
+    bytes,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  log(`已导出 ${comments.length} 条（Excel，树形排序）。`);
+});
+
 // 监听 background 的实时更新（采集过程中数量变化）
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === "COLLECT_DONE") {
