@@ -117,49 +117,20 @@ function csvEscape(v) {
   return s;
 }
 
-function toCsv(comments) {
-  const cols = [
-    "cid",
-    "parent_id",
-    "level",
-    "reply_id",
-    "reply_to_reply_id",
-    "reply_to_username",
-    "nickname",
-    "unique_id",
-    "uid",
-    "text",
-    "digg_count",
-    "reply_comment_total",
-    "create_time",
-    "create_time_text",
-    "create_time_iso",
-    "aweme_id",
-  ];
-  const lines = [cols.join(",")];
-  for (const c of comments) {
-    const iso = c.create_time ? new Date(c.create_time * 1000).toISOString() : "";
-    const row = [
-      c.cid,
-      c.parent_id || "",
-      c.level,
-      c.reply_id || "",
-      c.reply_to_reply_id || "",
-      c.reply_to_username || "",
-      c.user && c.user.nickname,
-      c.user && c.user.unique_id,
-      c.user && c.user.uid,
-      c.text,
-      c.digg_count,
-      c.reply_comment_total,
-      c.create_time,
-      c.create_time_text || "",
-      iso,
-      c.aweme_id,
-    ];
-    lines.push(row.map(csvEscape).join(","));
+// 精简：只保留 层级 / 评论内容(缩进) / 昵称 / 回复给，按树形深度优先排序
+function buildSimpleRows(comments) {
+  const ordered = treeToRows(buildTree(comments));
+  const rows = [["层级", "评论内容", "昵称", "回复给"]];
+  for (const it of ordered) {
+    const c = it.node;
+    const indent = "    ".repeat(it.depth) + (it.depth ? "└ " : "");
+    rows.push([it.depth, indent + (c.text || ""), (c.user && c.user.nickname) || "", c.reply_to_username || ""]);
   }
-  return lines.join("\r\n");
+  return rows;
+}
+
+function rowsToCsv(rows) {
+  return rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
 }
 
 async function getComments() {
@@ -214,21 +185,23 @@ $("clear").addEventListener("click", async () => {
 $("exportJson").addEventListener("click", async () => {
   const { comments, awemeId } = await getComments();
   if (!comments.length) return log("没有数据可导出。");
-  const tree = buildTree(comments);
-  const out = {
-    exported_at: new Date().toISOString(),
-    aweme_id: awemeId || "all",
-    total: comments.length,
-    tree,
+  // 精简节点：只留 评论内容 / 昵称 / 回复给 / 子回复
+  const simplify = (n) => {
+    const o = { text: n.text || "", nickname: (n.user && n.user.nickname) || "" };
+    if (n.reply_to_username) o.reply_to = n.reply_to_username;
+    const kids = (n.children || []).map(simplify);
+    if (kids.length) o.replies = kids;
+    return o;
   };
-  download(`tiktok_comments_${awemeId || "all"}.json`, JSON.stringify(out, null, 2), "application/json");
+  const tree = buildTree(comments).map(simplify);
+  download(`tiktok_comments_${awemeId || "all"}.json`, JSON.stringify(tree, null, 2), "application/json");
   log(`已导出 ${comments.length} 条（树形）。`);
 });
 
 $("exportCsv").addEventListener("click", async () => {
   const { comments, awemeId } = await getComments();
   if (!comments.length) return log("没有数据可导出。");
-  download(`tiktok_comments_${awemeId || "all"}.csv`, "﻿" + toCsv(comments), "text/csv;charset=utf-8");
+  download(`tiktok_comments_${awemeId || "all"}.csv`, "﻿" + rowsToCsv(buildSimpleRows(comments)), "text/csv;charset=utf-8");
   log(`已导出 ${comments.length} 条（CSV）。`);
 });
 
@@ -256,35 +229,7 @@ $("exportXlsx").addEventListener("click", async () => {
   if (!comments.length) return log("没有数据可导出。");
   if (!window.TKXlsx) return log("Excel 模块未加载，请重载扩展。");
 
-  const tree = buildTree(comments);
-  const ordered = treeToRows(tree);
-
-  const header = [
-    "序号", "层级", "缩进正文", "正文", "昵称", "用户名", "点赞数",
-    "回复数", "时间", "回复给", "父评论ID", "评论ID", "视频ID",
-  ];
-  const rows = [header];
-  ordered.forEach((it, i) => {
-    const c = it.node;
-    const indent = "    ".repeat(it.depth) + (it.depth ? "└ " : "");
-    rows.push([
-      i + 1,
-      it.depth, // 0=顶层, 1=回复, 2=楼中楼
-      indent + (c.text || ""),
-      c.text || "",
-      (c.user && c.user.nickname) || "",
-      (c.user && c.user.unique_id) || "",
-      c.digg_count || 0,
-      c.reply_comment_total || 0,
-      c.create_time_text || (c.create_time ? new Date(c.create_time * 1000).toLocaleString() : ""),
-      c.reply_to_username || "",
-      c.parent_id || "",
-      c.cid || "",
-      c.aweme_id || "",
-    ]);
-  });
-
-  const bytes = window.TKXlsx.build([{ name: "评论(树形)", rows }]);
+  const bytes = window.TKXlsx.build([{ name: "评论(树形)", rows: buildSimpleRows(comments) }]);
   downloadBytes(
     `tiktok_comments_${awemeId || "all"}.xlsx`,
     bytes,
