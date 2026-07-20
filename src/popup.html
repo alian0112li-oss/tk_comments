@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        width: 340px;
+        margin: 0;
+        padding: 12px;
+        font: 13px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      .row { display: flex; gap: 8px; margin: 6px 0; }
+      button {
+        flex: 1;
+        padding: 7px 8px;
+        border: 1px solid #8884;
+        border-radius: 6px;
+        background: #6c5ce7;
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      button.sec { background: transparent; color: inherit; }
+      button:disabled { opacity: .5; cursor: default; }
+      .stat {
+        background: #8881;
+        border-radius: 6px;
+        padding: 8px;
+        margin: 8px 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat b { font-size: 18px; }
+      #videos { max-height: 120px; overflow: auto; font-size: 12px; }
+      #videos div { padding: 2px 0; border-bottom: 1px solid #8882; }
+      #log { color: #888; font-size: 11px; min-height: 16px; margin-top: 6px; }
+      .muted { color: #888; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1>TikTok 评论采集器</h1>
+    <p class="muted">在视频页打开评论区后点击"开始采集"，脚本会自动滚动并展开回复。</p>
+
+    <div class="row">
+      <button id="start">▶ 开始采集</button>
+      <button id="stop" class="sec">■ 停止</button>
+    </div>
+
+    <div class="stat">
+      已采集评论：<b id="count">0</b> 条
+      <div id="videos"></div>
+    </div>
+
+    <div class="row">
+      <button id="exportJson" class="sec">导出 JSON(树)</button>
+      <button id="exportCsv" class="sec">导出 CSV</button>
+    </div>
+    <div class="row">
+      <button id="refresh" class="sec">刷新统计</button>
+      <button id="clear" class="sec">清空数据</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

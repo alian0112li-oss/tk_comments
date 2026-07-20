@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "TikTok 评论采集器",
+  "version": "0.1.0",
+  "description": "采集 TikTok 视频评论区数据，保留评论与回复的上下文关系（树形结构）。",
+  "permissions": ["storage", "downloads", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://www.tiktok.com/*",
+    "https://*.tiktok.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "TikTok 评论采集器"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.tiktok.com/*", "https://*.tiktok.com/*"],
+      "js": ["src/interceptor.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.tiktok.com/*", "https://*.tiktok.com/*"],
+      "js": ["src/content.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ]
+}
