@@ -787,26 +787,26 @@ class Parameter:
                 )
             )
             return {}
-        # 重新启用 TikTok msToken 远程刷新：cookie 里的 msToken 轮换很快，
-        # 直接用往往已过期导致接口返回空响应；这里向 mssdk 端点换取新鲜 msToken，
-        # 失败时回退到 cookie 本地值。
-        if d := await MsTokenTikTok.get_long_ms_token(
-            self.logger,
-            self.headers_params_tiktok,
-            m,
-            proxy=self.proxy_tiktok,
-        ):
-            self.logger.info(
-                f"TikTok MsToken 请求值: {d[MsTokenTikTok.NAME]}",
-                False,
-            )
-            return d
-        else:
-            self.logger.info(
-                f"TikTok MsToken 本地值: {m}",
-                False,
-            )
-            return {MsTokenTikTok.NAME: m}
+        # 保持原版行为：直接使用 cookie 中的 msToken（远程刷新经验证会导致
+        # 接口返回空响应，故沿用作者禁用远程刷新的做法）。
+        # if d := await MsTokenTikTok.get_long_ms_token(
+        #     self.logger,
+        #     self.headers_params_tiktok,
+        #     m,
+        #     proxy=self.proxy_tiktok,
+        # ):
+        #     self.logger.info(
+        #         f"TikTok MsToken 请求值: {d[MsTokenTikTok.NAME]}",
+        #         False,
+        #     )
+        #     return d
+        # else:
+        #     self.logger.info(
+        #         f"TikTok MsToken 本地值: {m}",
+        #         False,
+        #     )
+        #     return {MsTokenTikTok.NAME: m}
+        return {MsTokenTikTok.NAME: m}
 
     def set_uif_id(
         self,
