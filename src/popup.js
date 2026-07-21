@@ -212,6 +212,46 @@ $("exportCsv").addEventListener("click", async () => {
   log(`已导出 ${comments.length} 条（CSV）。`);
 });
 
+// 仿写提示词模板（风格规则固化于此，制作人员无需写任何东西）
+const REWRITE_INSTRUCTION = `你是资深社媒评论写手。下面是从 TikTok 采集的若干组真实评论，每组 = 一条顶层评论(层级0) + 它的回复(层级1/2)，用 Tab 分隔的三列：组号、层级、内容（回复用"    └ "缩进）。
+
+请为每一组"仿写"出一组全新的评论，规则：
+1. 结构完全对齐原组——原组有几条、每条是什么层级、回复关系如何，仿写就照样几条、同样层级、同样的回复关系。
+2. 语言与原组一致（日语就写自然、口语化的日语），保留 emoji 的使用风格与密度。
+3. 贴合原组的话题套路（例：犹豫是否购买 → 软性安利 → 肤质/效果等顾虑追问 → 同类人现身说法 → 好评/回购），但要换新的措辞，不要照抄原文。
+4. 安利/推荐一定要柔和：先分享个人真实体验，用"よかったら試してみてほしい""個人的にはすごく良かった"这类语气，绝不强推、不催买、不用"骗你就当我输"式的强硬话术。
+5. 只输出仿写结果，不要任何解释、不要保留原文。输出格式与输入相同：每行"组号<Tab>层级<Tab>内容"，回复用"    └ "缩进，组与组之间空一行。
+
+原评论：
+`;
+
+function buildPromptData(comments) {
+  // 复用分组行，取 组号/层级/内容 三列，去掉表头
+  const rows = buildSimpleRows(comments).slice(1);
+  return rows
+    .map((r) => (r[0] === "" ? "" : `${r[0]}\t${r[1]}\t${r[2]}`))
+    .join("\n");
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
 function downloadBytes(filename, bytes, mime) {
   const blob = new Blob([bytes], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -232,6 +272,21 @@ $("exportXlsx").addEventListener("click", async () => {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   );
   log(`已导出 ${comments.length} 条（Excel，按组）。`);
+});
+
+$("genPrompt").addEventListener("click", async () => {
+  const { comments } = await getComments();
+  if (!comments.length) return log("没有数据，请先采集评论。");
+  const groups = buildTree(comments).length;
+  const prompt = REWRITE_INSTRUCTION + buildPromptData(comments);
+  const ok = await copyText(prompt);
+  if (ok) {
+    log(`已复制仿写提示词（${groups} 组）。粘贴到 Claude 即可得到仿写成品。`);
+  } else {
+    // 复制失败则下载为 txt
+    download("仿写提示词.txt", prompt, "text/plain;charset=utf-8");
+    log(`剪贴板不可用，已下载为「仿写提示词.txt」（${groups} 组）。`);
+  }
 });
 
 // 监听 background 的实时更新（采集过程中数量变化）
