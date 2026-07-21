@@ -20,9 +20,18 @@ class CommentTikTok(Comment, APITikTok):
         cursor=0,
         count=20,
         count_reply=3,
+        reply: bool = False,
     ):
         super().__init__(
-            params, cookie, proxy, detail_id, pages, cursor, count, count_reply
+            params,
+            cookie,
+            proxy,
+            detail_id,
+            pages,
+            cursor,
+            count,
+            count_reply,
+            reply,
         )
         self.api = f"{self.domain}api/comment/list/"
         self.text = _("作品评论")
@@ -80,6 +89,9 @@ class ReplyTikTok(Reply, CommentTikTok, APITikTok):
             "from_page": "video",
             "item_id": self.item_id,
         }
+
+
+CommentTikTok.reply_class = ReplyTikTok
 
 
 async def test():

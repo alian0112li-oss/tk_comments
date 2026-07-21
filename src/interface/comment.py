@@ -10,6 +10,9 @@ if TYPE_CHECKING:
 
 
 class Comment(API):
+    # 采集评论回复时实例化的类；TikTok 子类会覆盖为 ReplyTikTok
+    reply_class: Type["Reply"] = None
+
     def __init__(
         self,
         params: Union["Parameter", "Params"],
@@ -159,7 +162,7 @@ class Comment(API):
             return
         reply_ids = Extractor.extract_reply_ids(self.current_page)
         for reply_id in reply_ids:
-            reply = Reply(
+            reply = self.reply_class(
                 self.params_object,
                 self.cookie,
                 self.proxy,
@@ -338,6 +341,9 @@ class Reply(Comment):
             *args,
             **kwargs,
         )
+
+
+Comment.reply_class = Reply
 
 
 async def test():

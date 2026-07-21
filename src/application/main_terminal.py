@@ -16,7 +16,7 @@ from ..interface import (
     Account,
     AccountTikTok,
     Collection,
-    # CommentTikTok,
+    CommentTikTok,
     Collects,
     CollectsDetail,
     CollectsMix,
@@ -34,6 +34,7 @@ from ..interface import (
     Mix,
     MixTikTok,
     Reply,
+    ReplyTikTok,
     Search,
     User,
 )
@@ -201,7 +202,10 @@ class TikTok:
                 _("获取直播拉流地址(TikTok)"),
                 self.live_interactive_tiktok,
             ),
-            # (_("采集作品评论数据(TikTok)"), self.comment_interactive_tiktok,),
+            (
+                _("采集作品评论数据(TikTok)"),
+                self.comment_interactive_tiktok,
+            ),
             # (
             #     _("批量下载视频原画(TikTok)"),
             #     self.detail_interactive_tiktok_unofficial,
@@ -254,7 +258,7 @@ class TikTok:
         )
         self.__function_comment_tiktok = (
             (_("手动输入待采集的作品链接"), self.__comment_inquire_tiktok),
-            # (_("从文本文档读取待采集的作品链接"), self.__comment_txt_tiktok),
+            (_("从文本文档读取待采集的作品链接"), self.__comment_txt_tiktok),
         )
         self.__function_search = (
             (
@@ -1262,7 +1266,11 @@ class TikTok:
 
     @check_storage_format
     async def comment_interactive_tiktok(self, select="", *args, **kwargs):
-        ...
+        await self.__secondary_menu(
+            _("请选择作品链接来源"),
+            self.__function_comment_tiktok,
+            select or safe_pop(self.run_command),
+        )
         self.logger.info(_("已退出采集作品评论数据(TikTok)模式"))
 
     @check_storage_format
@@ -1315,6 +1323,13 @@ class TikTok:
             self.comment_handle,
         )
 
+    async def __comment_txt_tiktok(
+        self,
+    ):
+        await self.__comment_txt(
+            True,
+        )
+
     async def comment_handle_single(
         self,
         detail_id: str,
@@ -1340,7 +1355,16 @@ class TikTok:
         proxy: str = None,
         source: bool = False,
         **kwargs,
-    ) -> list: ...
+    ) -> list:
+        if data := await CommentTikTok(
+            self.parameter,
+            cookie,
+            proxy,
+            detail_id=detail_id,
+            **kwargs,
+        ).run():
+            return data if source else await self.save_comment(detail_id, data)
+        return []
 
     async def comment_handle(
         self,
@@ -1415,7 +1439,19 @@ class TikTok:
         cookie: str = None,
         proxy: str = None,
         source=False,
-    ): ...
+    ):
+        if data := await ReplyTikTok(
+            self.parameter,
+            cookie,
+            proxy,
+            detail_id=detail_id,
+            comment_id=comment_id,
+            pages=pages,
+            cursor=cursor,
+            count=count,
+        ).run():
+            return data if source else await self.save_comment(detail_id, data)
+        return []
 
     async def mix_interactive(
         self,

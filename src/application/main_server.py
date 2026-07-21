@@ -394,6 +394,80 @@ class APIServer(TikTok):
             return self.failed_response(extract)
 
         @self.server.post(
+            "/tiktok/comment",
+            summary=_("获取作品评论数据"),
+            description=_(
+                dedent("""
+                **参数**:
+
+                - **cookie**: TikTok Cookie；可选参数
+                - **proxy**: 代理；可选参数
+                - **source**: 是否返回原始响应数据；可选参数，默认值：False
+                - **detail_id**: TikTok 作品 ID；必需参数
+                - **pages**: 最大请求次数；可选参数
+                - **cursor**: 可选参数
+                - **count**: 可选参数
+                - **count_reply**: 可选参数
+                - **reply**: 可选参数，默认值：False
+                """)
+            ),
+            tags=[_("TikTok")],
+            response_model=DataResponse,
+        )
+        async def handle_comment_tiktok(
+            extract: Comment, token: str = Depends(token_dependency)
+        ):
+            if data := await self.comment_handle_single_tiktok(
+                extract.detail_id,
+                cookie=extract.cookie,
+                proxy=extract.proxy,
+                source=extract.source,
+                pages=extract.pages,
+                cursor=extract.cursor,
+                count=extract.count,
+                count_reply=extract.count_reply,
+                reply=extract.reply,
+            ):
+                return self.success_response(extract, data)
+            return self.failed_response(extract)
+
+        @self.server.post(
+            "/tiktok/reply",
+            summary=_("获取评论回复数据"),
+            description=_(
+                dedent("""
+                **参数**:
+
+                - **cookie**: TikTok Cookie；可选参数
+                - **proxy**: 代理；可选参数
+                - **source**: 是否返回原始响应数据；可选参数，默认值：False
+                - **detail_id**: TikTok 作品 ID；必需参数
+                - **comment_id**: 评论 ID；必需参数
+                - **pages**: 最大请求次数；可选参数
+                - **cursor**: 可选参数
+                - **count**: 可选参数
+                """)
+            ),
+            tags=[_("TikTok")],
+            response_model=DataResponse,
+        )
+        async def handle_reply_tiktok(
+            extract: Reply, token: str = Depends(token_dependency)
+        ):
+            if data := await self.reply_handle_tiktok(
+                extract.detail_id,
+                extract.comment_id,
+                cookie=extract.cookie,
+                proxy=extract.proxy,
+                pages=extract.pages,
+                cursor=extract.cursor,
+                count=extract.count,
+                source=extract.source,
+            ):
+                return self.success_response(extract, data)
+            return self.failed_response(extract)
+
+        @self.server.post(
             "/douyin/search/general",
             summary=_("获取综合搜索数据"),
             description=_(
